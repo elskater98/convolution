@@ -17,6 +17,8 @@
 #include <sys/time.h>
 #include <time.h>
 
+#define NUM_THREADS 4
+
 // Structure for storing the content of an image.
 struct imagenppm{
     int height;
@@ -76,9 +78,13 @@ ImagenData  readImage(char* name){
         if ((Img->R=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
         if ((Img->G=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
         if ((Img->B=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
+
+        #pragma omp for schedule(static) ordered    
         for(i=0;i<Img->width*Img->height;i++){
+            #pragma omp ordered
             fscanf(fp,"%d %d %d ",&Img->R[i],&Img->G[i],&Img->B[i]);
         }
+        
         fclose(fp);
     }
     return Img;
@@ -201,7 +207,7 @@ int convolve2D(int* in, int* out, int dataSizeX, int dataSizeY,
     kPtr = kernel;
 
     // start convolution
-    #pragma omp parallel num_threads(4) private(sum, i, rowMax, rowMin, j, m, n, colMax, colMin) firstprivate(kPtr, inPtr, inPtr2, outPtr)
+    #pragma omp parallel num_threads(NUM_THREADS) private(sum, i, rowMax, rowMin, j, m, n, colMax, colMin) firstprivate(kPtr, inPtr, inPtr2, outPtr)
     {
         for(i= 0; i < dataSizeY; ++i)                   // number of rows
         {
