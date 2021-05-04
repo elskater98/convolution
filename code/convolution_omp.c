@@ -79,9 +79,7 @@ ImagenData  readImage(char* name){
         if ((Img->G=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
         if ((Img->B=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
 
-        #pragma omp for schedule(static) ordered    
         for(i=0;i<Img->width*Img->height;i++){
-            #pragma omp ordered
             fscanf(fp,"%d %d %d ",&Img->R[i],&Img->G[i],&Img->B[i]);
         }
         
