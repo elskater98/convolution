@@ -17,7 +17,7 @@
 #include <sys/time.h>
 #include <time.h>
 
-#define MAX_THREADS 4
+#define MAX_THREADS 8
 
 // Structure for storing the content of an image.
 struct imagenppm{
@@ -206,7 +206,6 @@ int convolve2D(int* in, int* out, int dataSizeX, int dataSizeY,
 
     // start convolution
     #pragma omp parallel for schedule(dynamic) num_threads(MAX_THREADS) private(sum, i, rowMax, rowMin, j, m, n, colMax, colMin) firstprivate(kPtr, inPtr, inPtr2, outPtr)
-    
         for(i= 0; i < dataSizeY; ++i)                   // number of rows
         {
             // compute the range of convolution, the current row of kernel should be between these
@@ -310,7 +309,7 @@ int main(int argc, char **argv)
     gettimeofday(&tim, NULL);
     double t4=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-    #pragma omp parallel sections default(none) shared(source,output,kern)
+    #pragma omp parallel sections num_threads(MAX_THREADS) default(none) shared(source,output,kern)
     {
 
         #pragma omp section
