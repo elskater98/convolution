@@ -1,2 +1,2 @@
-main: convolution_omp.c
-	gcc -o convolution_omp -fopenmp convolution_omp.c
+main: convolution_mpi.c
+	mpicc -o convolution_mpi -fopenmp convolution_mpi.c
