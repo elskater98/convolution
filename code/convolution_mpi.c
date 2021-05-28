@@ -345,12 +345,28 @@ int main(int argc, char **argv)
 
         //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
 
-        MPI_Datatype restype;
-        int blocklengths[8] = {1,1,1,1,1,1,1,1};
-        
 
-        MPI_Type_struct(8,);
-        MPI_Scatterv(source,rowsPerTask,displacement,MPI_PACKED,0,MPI_COMM_WORLD);
+
+        /*****************/
+        int blocklengths[8] = {1,1,1,1,1,1,1,1};
+        MPI_Datatype restype;
+        MPI_Datatype types[8] = {MPI_INT, MPI_INT, MPI_CHAR, MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
+        MPI_Aint displacements[8];
+
+        displacements[0] = (MPI_Aint) 0;
+        displacements[3] = MPI_CHAR;
+        displacements[1] = displacements[2] = displacements[4] = displacements[5] = displacements[6] = displacements[7] = MPI_INT;
+
+        MPI_Type_struct(8, blocklengths, displacements, types, &restype);   
+        MPI_Type_commit(&restype);
+
+        char buffer[1000];
+        int position = 0;
+        MPI_Pack(&source,1,restype,buffer,1000,&position,MPI_COMM_WORLD);
+
+
+        /*******/
+        MPI_Scatterv(buffer,rowsPerTask,displacement,MPI_PACKED,0,MPI_COMM_WORLD);
         
         convolve2D(source->R, output->R, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
         convolve2D(source->G, output->G, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
