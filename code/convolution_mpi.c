@@ -281,71 +281,112 @@ int main(int argc, char **argv)
         printf("- image_file : source image path (*.ppm)\n");
         printf("- kernel_file: kernel path (text file with 1D kernel matrix)\n");
         printf("- result_file: result image path (*.ppm)\n");
-        printf("- partitions: Number of rows\n\n");
+        printf("- number of fragments\n\n");
         return -1;
     }
 
+    int num_partitions = atoi(argv[4]);
+
     struct timeval tim;
+
     gettimeofday(&tim, NULL);
     double t1=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-    //Read the source image.
-    ImagenData  source=NULL, output=NULL;
-    if ( (source=readImage(argv[1]))==NULL) {
+    //Kernel reading
+    kernelData kern=NULL;
+    if ( (kern = readKernel(argv[2]))==NULL) {
+        //free(source);
+        //free(output);
         return -1;
     }
 
     gettimeofday(&tim, NULL);
     double t2=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-    // Duplicate the image in a new structure that will contain the output image
-    if ( (output=duplicateImageData(source)) == NULL) {
-        return -1;
+    
+    if ( rank == 0 ){ // Master
+        
+        gettimeofday(&tim, NULL);
+        double t3=tim.tv_sec+(tim.tv_usec/1000000.0);
+
+        //Read the source image.
+        ImagenData  source=NULL, output=NULL;
+        if ( (source=readImage(argv[1]))==NULL) {
+            return -1;
+        }
+
+        gettimeofday(&tim, NULL);
+        double t4=tim.tv_sec+(tim.tv_usec/1000000.0);
+
+        // Duplicate the image in a new structure that will contain the output image
+        if ( (output=duplicateImageData(source)) == NULL) {
+            return -1;
+        }
+
+        // Master Task (MPI)
+        //Divide Image by rows (Divide and conquer)
+        int *rowsPerTask = malloc(sizeof(int)*size);
+        int *displacement = malloc(sizeof(int)*size);
+
+        /* 
+            Displacement -> N_i = W X i * rowPerTask[i] to W X i * rowPerTask[i]-1
+        */
+
+        int sizePerCore = source->height/size; 
+
+        for (int i = 0; i < size-1; i++)
+        {
+           rowsPerTask[i] = sizePerCore;
+           displacement[i] = i*sizePerCore;
+        }
+
+        rowsPerTask[size-1] = source->height % size == 0 ? sizePerCore : sizePerCore + 1;
+        displacement[size-1] = size-1 * sizePerCore;
+
+        //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
+
+        MPI_Datatype restype;
+        int blocklengths[8] = {1,1,1,1,1,1,1,1};
+        
+
+        MPI_Type_struct(8,);
+        MPI_Scatterv(source,rowsPerTask,displacement,MPI_PACKED,0,MPI_COMM_WORLD);
+        
+        convolve2D(source->R, output->R, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+        convolve2D(source->G, output->G, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+        convolve2D(source->B, output->B, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+
+        gettimeofday(&tim, NULL);
+        double t5=tim.tv_sec+(tim.tv_usec/1000000.0);
+
+        // Image writing
+        if (saveFile(output, argv[3])!=0) {
+            printf("Error saving the image\n");
+            free(source);
+            free(output);
+            return -1;
+        }
+
+        gettimeofday(&tim, NULL);
+        double t6=tim.tv_sec+(tim.tv_usec/1000000.0);
+        clock_t finish=clock();
+        
+        /*printf("Image: %s\n", argv[1]);
+        printf("SizeX : %d\n", source->width);
+        printf("SizeY : %d\n", source->height);
+        printf("%.6lf seconds elapsed for Reading image file.\n", t2-t1);
+        printf("%.6lf seconds elapsed for copying image structure.\n", t3-t2);
+        printf("%.6lf seconds elapsed for Reading kernel matrix.\n", t4-t3);
+        printf("%.6lf seconds elapsed for make the convolution.\n", t5-t4);
+        printf("%.6lf seconds elapsed for writing the resulting image.\n", t6-t5);
+        printf("%.6lf seconds elapsed\n", t6-t1);*/
+
+    }else{ //Slave
+
+        
+
+        
     }
-
-    gettimeofday(&tim, NULL);
-    double t3=tim.tv_sec+(tim.tv_usec/1000000.0);
-
-    //Kernel reading
-    kernelData kern=NULL;
-    if ( (kern = readKernel(argv[2]))==NULL) {
-        free(source);
-        free(output);
-        return -1;
-    }
-
-    gettimeofday(&tim, NULL);
-    double t4=tim.tv_sec+(tim.tv_usec/1000000.0);
-
-    convolve2D(source->R, output->R, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
-    convolve2D(source->G, output->G, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
-    convolve2D(source->B, output->B, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
-
-    gettimeofday(&tim, NULL);
-    double t5=tim.tv_sec+(tim.tv_usec/1000000.0);
-
-    // Image writing
-    if (saveFile(output, argv[3])!=0) {
-        printf("Error saving the image\n");
-        free(source);
-        free(output);
-        return -1;
-    }
-
-    gettimeofday(&tim, NULL);
-    double t6=tim.tv_sec+(tim.tv_usec/1000000.0);
-    clock_t finish=clock();
-
-    printf("Image: %s\n", argv[1]);
-    printf("SizeX : %d\n", source->width);
-    printf("SizeY : %d\n", source->height);
-    printf("%.6lf seconds elapsed for Reading image file.\n", t2-t1);
-    printf("%.6lf seconds elapsed for copying image structure.\n", t3-t2);
-    printf("%.6lf seconds elapsed for Reading kernel matrix.\n", t4-t3);
-    printf("%.6lf seconds elapsed for make the convolution.\n", t5-t4);
-    printf("%.6lf seconds elapsed for writing the resulting image.\n", t6-t5);
-    printf("%.6lf seconds elapsed\n", t6-t1);
-
 
     // Finalize MPI
     MPI_Finalize();
