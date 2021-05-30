@@ -343,30 +343,52 @@ int main(int argc, char **argv)
         rowsPerTask[size-1] = source->height % size == 0 ? sizePerCore : sizePerCore + 1;
         displacement[size-1] = size-1 * sizePerCore;
 
+        /******************/
+        /* MPI DATA TYPE  */
+        /******************/
+
+        //https://www.rookiehpc.com/mpi/docs/mpi_type_create_struct.php
+
+        // Create the datatype
+        MPI_Datatype image_type;
+        int lengths[8]={1,1,1,1,1,1,1,1};
+
+        MPI_Aint displacements[8];
+        ImagenData dummy_image;
+        MPI_Aint base_address;
+
+        MPI_Get_address(&dummy_image,&base_address);
+        MPI_Get_address(&dummy_image->height,&displacement[0]);
+        MPI_Get_address(&dummy_image->width,&displacement[1]);
+        MPI_Get_address(&dummy_image->comment,&displacement[2]);
+        MPI_Get_address(&dummy_image->maxcolor,&displacement[3]);
+        MPI_Get_address(&dummy_image->P,&displacement[4]);
+        MPI_Get_address(&dummy_image->R,&displacement[5]);
+        MPI_Get_address(&dummy_image->G,&displacement[6]);
+        MPI_Get_address(&dummy_image->B,&displacement[7]);
+
+        displacements[0] = MPI_Aint_diff(displacements[0],base_address);
+        displacements[1] = MPI_Aint_diff(displacements[1],base_address);
+        displacements[2] = MPI_Aint_diff(displacements[2],base_address);
+        displacements[3] = MPI_Aint_diff(displacements[3],base_address);
+        displacements[4] = MPI_Aint_diff(displacements[4],base_address);
+        displacements[5] = MPI_Aint_diff(displacements[5],base_address);
+        displacements[6] = MPI_Aint_diff(displacements[6],base_address);
+        displacements[7] = MPI_Aint_diff(displacements[7],base_address);
+
+        MPI_Datatype types[8] = { MPI_INT, MPI_INT, MPI_CHAR, MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
+        MPI_Type_create_struct(8, lengths, displacements, types, &image_type);
+        MPI_Type_commit(&image_type);
+
+        char *sendbuf[1000];
+        char *sendcounts
+
+
+
         //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
 
-
-
-        /*****************/
-        int blocklengths[8] = {1,1,1,1,1,1,1,1};
-        MPI_Datatype restype;
-        MPI_Datatype types[8] = {MPI_INT, MPI_INT, MPI_CHAR, MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
-        MPI_Aint displacements[8];
-
-        displacements[0] = (MPI_Aint) 0;
-        displacements[3] = MPI_CHAR;
-        displacements[1] = displacements[2] = displacements[4] = displacements[5] = displacements[6] = displacements[7] = MPI_INT;
-
-        MPI_Type_struct(8, blocklengths, displacements, types, &restype);   
-        MPI_Type_commit(&restype);
-
-        char buffer[1000];
-        int position = 0;
-        MPI_Pack(&source,1,restype,buffer,1000,&position,MPI_COMM_WORLD);
-
-
-        /*******/
-        MPI_Scatterv(buffer,rowsPerTask,displacement,MPI_PACKED,0,MPI_COMM_WORLD);
+        // Split work for each node
+        MPI_Scatterv(,0,MPI_COMM_WORLD);
         
         convolve2D(source->R, output->R, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
         convolve2D(source->G, output->G, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
