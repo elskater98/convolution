@@ -324,23 +324,20 @@ int main(int argc, char **argv)
         }
 
         // Master Task (MPI)
-        //Divide Image by rows (Divide and conquer)
-        int *rowsPerTask = malloc(sizeof(int)*size);
+        //Divide Load
+        int *sendcounts = malloc(sizeof(int)*size);
         int *displacement = malloc(sizeof(int)*size);
 
-        /* 
-            Displacement -> N_i = W X i * rowPerTask[i] to W X i * rowPerTask[i]-1
-        */
-
+        // Displacement -> N_i = W X i * rowPerTask[i] to W X i * rowPerTask[i]-1
         int sizePerCore = source->height/size; 
 
         for (int i = 0; i < size-1; i++)
         {
-           rowsPerTask[i] = sizePerCore;
-           displacement[i] = i*sizePerCore;
+           sendcounts[i] = sizePerCore;
+           displacement[i] = i * sizePerCore;
         }
 
-        rowsPerTask[size-1] = source->height % size == 0 ? sizePerCore : sizePerCore + 1;
+        sendcounts[size-1] = source->height % size == 0 ? sizePerCore : sizePerCore + 1;
         displacement[size-1] = size-1 * sizePerCore;
 
         /******************/
@@ -380,15 +377,19 @@ int main(int argc, char **argv)
         MPI_Type_create_struct(8, lengths, displacements, types, &image_type);
         MPI_Type_commit(&image_type);
 
-        char *sendbuf[1000];
-        char *sendcounts
-
-
-
         //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
+        //https://stackoverflow.com/questions/24633337/mpi-scatterv-mpi-gatherv-for-multiple-3d-arrays
 
         // Split work for each node
-        MPI_Scatterv(,0,MPI_COMM_WORLD);
+        /*int MPI_Scatterv(const void *sendbuf, const int *sendcounts, const int *displs,
+                 MPI_Datatype sendtype, void *recvbuf, int recvcount,
+                 MPI_Datatype recvtype,
+                 int root, MPI_Comm comm)*/
+
+        ImagenData recvbuf;
+        
+        //printf("%i", sendcounts[6]);
+        MPI_Scatterv(source,sendcounts,displacement,image_type,recvbuf,size,image_type,0,MPI_COMM_WORLD);
         
         convolve2D(source->R, output->R, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
         convolve2D(source->G, output->G, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
@@ -396,6 +397,8 @@ int main(int argc, char **argv)
 
         gettimeofday(&tim, NULL);
         double t5=tim.tv_sec+(tim.tv_usec/1000000.0);
+
+        // Gather
 
         // Image writing
         if (saveFile(output, argv[3])!=0) {
