@@ -272,7 +272,7 @@ int main(int argc, char **argv)
     int size;
     MPI_Comm_size(MPI_COMM_WORLD,&size);
 
-    if(argc != 5)
+    if(argc != 4)
     {
         printf("Usage: %s <image-file> <kernel-file> <result-file> <partitions>\n", argv[0]);
 
@@ -281,11 +281,8 @@ int main(int argc, char **argv)
         printf("- image_file : source image path (*.ppm)\n");
         printf("- kernel_file: kernel path (text file with 1D kernel matrix)\n");
         printf("- result_file: result image path (*.ppm)\n");
-        printf("- number of fragments\n\n");
         return -1;
     }
-
-    int num_partitions = atoi(argv[4]);
 
     struct timeval tim;
 
@@ -303,7 +300,6 @@ int main(int argc, char **argv)
     gettimeofday(&tim, NULL);
     double t2=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-
     //Read the source image.
     ImagenData source=NULL, output=NULL;
 
@@ -312,11 +308,10 @@ int main(int argc, char **argv)
     int *displacement = malloc(sizeof(int)*size);
 
     // Scatter Variables
-    int  *receiveArray;
+    int  *receiveArray=malloc(sizeof(int)*10000);
     int sizePerCore; 
-    
-    if ( rank == 0 ){ // Master
 
+    if(rank==0){
         gettimeofday(&tim, NULL);
         double t3=tim.tv_sec+(tim.tv_usec/1000000.0);
 
@@ -343,37 +338,40 @@ int main(int argc, char **argv)
 
         sendcounts[size-1] = source->width % size == 0 ? sizePerCore : sizePerCore + 1;
         displacement[size-1] = (size-1) * sizePerCore;
+        
+    }else{
 
-        //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
-        //https://stackoverflow.com/questions/24633337/mpi-scatterv-mpi-gatherv-for-multiple-3d-arrays
-
+    //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
+    //https://stackoverflow.com/questions/24633337/mpi-scatterv-mpi-gatherv-for-multiple-3d-arrays
+    MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+    MPI_Scatterv(source->G,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+    MPI_Scatterv(source->B,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
     }
 
-    printf("%i,",sendcounts[rank]);
-
+    
     //MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
 
     /*convolve2D(source->R, output->R, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
     convolve2D(source->G, output->G, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
     convolve2D(source->B, output->B, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);*/
 
-    if(rank==0){
+    /*if(rank==0){
 
         gettimeofday(&tim, NULL);
         double t5=tim.tv_sec+(tim.tv_usec/1000000.0);
 
         // Image writing
-        /*if (saveFile(output, argv[3])!=0) {
+        if (saveFile(output, argv[3])!=0) {
             printf("Error saving the image\n");
             free(source);
             free(output);
             return -1;
-        }*/
+        }
 
         gettimeofday(&tim, NULL);
         double t6=tim.tv_sec+(tim.tv_usec/1000000.0);
         clock_t finish=clock();
-    }
+    }*/
     
     
     /*printf("Image: %s\n", argv[1]);
