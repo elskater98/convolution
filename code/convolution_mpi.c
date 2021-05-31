@@ -303,14 +303,23 @@ int main(int argc, char **argv)
     gettimeofday(&tim, NULL);
     double t2=tim.tv_sec+(tim.tv_usec/1000000.0);
 
+
+    //Read the source image.
+    ImagenData source=NULL, output=NULL;
+
+    //Divide Load
+    int *sendcounts = malloc(sizeof(int)*size);
+    int *displacement = malloc(sizeof(int)*size);
+
+    // Scatter Variables
+    int  *receiveArray;
+    int sizePerCore; 
     
     if ( rank == 0 ){ // Master
-        
+
         gettimeofday(&tim, NULL);
         double t3=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-        //Read the source image.
-        ImagenData  source=NULL, output=NULL;
         if ( (source=readImage(argv[1]))==NULL) {
             return -1;
         }
@@ -323,111 +332,59 @@ int main(int argc, char **argv)
             return -1;
         }
 
-        // Master Task (MPI)
-        //Divide Load
-        int *sendcounts = malloc(sizeof(int)*size);
-        int *displacement = malloc(sizeof(int)*size);
-
         // Displacement -> N_i = W X i * rowPerTask[i] to W X i * rowPerTask[i]-1
-        int sizePerCore = source->height/size; 
+        sizePerCore = source->width/size;
 
         for (int i = 0; i < size-1; i++)
         {
-           sendcounts[i] = sizePerCore;
-           displacement[i] = i * sizePerCore;
+            sendcounts[i] = sizePerCore;
+            displacement[i] = i * sizePerCore;
         }
 
-        sendcounts[size-1] = source->height % size == 0 ? sizePerCore : sizePerCore + 1;
-        displacement[size-1] = size-1 * sizePerCore;
-
-        /******************/
-        /* MPI DATA TYPE  */
-        /******************/
-
-        //https://www.rookiehpc.com/mpi/docs/mpi_type_create_struct.php
-
-        // Create the datatype
-        MPI_Datatype image_type;
-        int lengths[8]={1,1,1,1,1,1,1,1};
-
-        MPI_Aint displacements[8];
-        ImagenData dummy_image;
-        MPI_Aint base_address;
-
-        MPI_Get_address(&dummy_image,&base_address);
-        MPI_Get_address(&dummy_image->height,&displacement[0]);
-        MPI_Get_address(&dummy_image->width,&displacement[1]);
-        MPI_Get_address(&dummy_image->comment,&displacement[2]);
-        MPI_Get_address(&dummy_image->maxcolor,&displacement[3]);
-        MPI_Get_address(&dummy_image->P,&displacement[4]);
-        MPI_Get_address(&dummy_image->R,&displacement[5]);
-        MPI_Get_address(&dummy_image->G,&displacement[6]);
-        MPI_Get_address(&dummy_image->B,&displacement[7]);
-
-        displacements[0] = MPI_Aint_diff(displacements[0],base_address);
-        displacements[1] = MPI_Aint_diff(displacements[1],base_address);
-        displacements[2] = MPI_Aint_diff(displacements[2],base_address);
-        displacements[3] = MPI_Aint_diff(displacements[3],base_address);
-        displacements[4] = MPI_Aint_diff(displacements[4],base_address);
-        displacements[5] = MPI_Aint_diff(displacements[5],base_address);
-        displacements[6] = MPI_Aint_diff(displacements[6],base_address);
-        displacements[7] = MPI_Aint_diff(displacements[7],base_address);
-
-        MPI_Datatype types[8] = { MPI_INT, MPI_INT, MPI_CHAR, MPI_INT, MPI_INT, MPI_INT, MPI_INT, MPI_INT};
-        MPI_Type_create_struct(8, lengths, displacements, types, &image_type);
-        MPI_Type_commit(&image_type);
+        sendcounts[size-1] = source->width % size == 0 ? sizePerCore : sizePerCore + 1;
+        displacement[size-1] = (size-1) * sizePerCore;
 
         //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
         //https://stackoverflow.com/questions/24633337/mpi-scatterv-mpi-gatherv-for-multiple-3d-arrays
 
-        // Split work for each node
-        /*int MPI_Scatterv(const void *sendbuf, const int *sendcounts, const int *displs,
-                 MPI_Datatype sendtype, void *recvbuf, int recvcount,
-                 MPI_Datatype recvtype,
-                 int root, MPI_Comm comm)*/
+    }
 
-        ImagenData recvbuf;
-        
-        //printf("%i", sendcounts[6]);
-        MPI_Scatterv(source,sendcounts,displacement,image_type,recvbuf,size,image_type,0,MPI_COMM_WORLD);
-        
-        convolve2D(source->R, output->R, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
-        convolve2D(source->G, output->G, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
-        convolve2D(source->B, output->B, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+    printf("%i,",sendcounts[rank]);
+
+    //MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+
+    /*convolve2D(source->R, output->R, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(source->G, output->G, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(source->B, output->B, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);*/
+
+    if(rank==0){
 
         gettimeofday(&tim, NULL);
         double t5=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-        // Gather
-
         // Image writing
-        if (saveFile(output, argv[3])!=0) {
+        /*if (saveFile(output, argv[3])!=0) {
             printf("Error saving the image\n");
             free(source);
             free(output);
             return -1;
-        }
+        }*/
 
         gettimeofday(&tim, NULL);
         double t6=tim.tv_sec+(tim.tv_usec/1000000.0);
         clock_t finish=clock();
-        
-        /*printf("Image: %s\n", argv[1]);
-        printf("SizeX : %d\n", source->width);
-        printf("SizeY : %d\n", source->height);
-        printf("%.6lf seconds elapsed for Reading image file.\n", t2-t1);
-        printf("%.6lf seconds elapsed for copying image structure.\n", t3-t2);
-        printf("%.6lf seconds elapsed for Reading kernel matrix.\n", t4-t3);
-        printf("%.6lf seconds elapsed for make the convolution.\n", t5-t4);
-        printf("%.6lf seconds elapsed for writing the resulting image.\n", t6-t5);
-        printf("%.6lf seconds elapsed\n", t6-t1);*/
-
-    }else{ //Slave
-
-        
-
-        
     }
+    
+    
+    /*printf("Image: %s\n", argv[1]);
+    printf("SizeX : %d\n", source->width);
+    printf("SizeY : %d\n", source->height);
+    printf("%.6lf seconds elapsed for Reading image file.\n", t2-t1);
+    printf("%.6lf seconds elapsed for copying image structure.\n", t3-t2);
+    printf("%.6lf seconds elapsed for Reading kernel matrix.\n", t4-t3);
+    printf("%.6lf seconds elapsed for make the convolution.\n", t5-t4);
+    printf("%.6lf seconds elapsed for writing the resulting image.\n", t6-t5);
+    printf("%.6lf seconds elapsed\n", t6-t1);*/
 
     // Finalize MPI
     MPI_Finalize();
