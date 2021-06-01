@@ -84,6 +84,7 @@ ImagenData  readImage(char* name){
         }
         fclose(fp);
     }
+
     return Img;
 }
 
@@ -297,39 +298,42 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    gettimeofday(&tim, NULL);
-    double t2=tim.tv_sec+(tim.tv_usec/1000000.0);
-
     //Read the source image.
     ImagenData source=NULL, output=NULL;
-
-    gettimeofday(&tim, NULL);
-    double t3=tim.tv_sec+(tim.tv_usec/1000000.0);
-
-    if ( (source=readImage(argv[1]))==NULL) {
-        return -1;
-    }
-
-    gettimeofday(&tim, NULL);
-    double t4=tim.tv_sec+(tim.tv_usec/1000000.0);
-
 
     // MPI
     //Divide Load
     int *sendcounts = malloc(sizeof(int)*size);
     int *displacement = malloc(sizeof(int)*size);
 
-    // Scatter Variables
-    int  *receiveArray = malloc(sizeof(int)*source->width);
-    int sizePerCore;
+    gettimeofday(&tim, NULL);
+    double t2=tim.tv_sec+(tim.tv_usec/1000000.0);
+
+    gettimeofday(&tim, NULL);
+    double t3=tim.tv_sec+(tim.tv_usec/1000000.0);
+
+    if ((source=readImage(argv[1]))==NULL) {
+        return -1;
+    }
+
+    /*if (rank == 0) {
+        printf("Width: %i, Height: %i\n", source->width, source->height);
+        for (int i = 0; i < source->width*source->height; i++){
+            printf("%i,", source->R[i]);
+        } 
+    }*/
+
+    gettimeofday(&tim, NULL);
+    double t4=tim.tv_sec+(tim.tv_usec/1000000.0);
 
     // Duplicate the image in a new structure that will contain the output image
-    if ( (output=duplicateImageData(source)) == NULL) {
+    if ((output=duplicateImageData(source)) == NULL) {
         return -1;
     }
 
     // Displacement -> N_i = W X i * rowPerTask[i] to W X i * rowPerTask[i]-1
-    sizePerCore = source->width/size;
+    int sizePerCore;
+    sizePerCore = (source->width*source->height)/size;
 
     for (int i = 0; i < size-1; i++)
     {
@@ -339,18 +343,31 @@ int main(int argc, char **argv)
 
     sendcounts[size-1] = source->width % size == 0 ? sizePerCore : sizePerCore + 1;
     displacement[size-1] = (size-1) * sizePerCore;
-        
+
+    // Scatter Variables
+    printf("%i\n", sizePerCore);
+    int *receiveR = malloc(sizeof(int)*(sizePerCore+1));
+    int *receiveB = malloc(sizeof(int)*(sizePerCore+1));
+    int *receiveG = malloc(sizeof(int)*(sizePerCore+1));
+    int *outputR = malloc(sizeof(int)*(sizePerCore+1));
+    int *outputG = malloc(sizeof(int)*(sizePerCore+1));
+    int *outputB = malloc(sizeof(int)*(sizePerCore+1));  
+
     //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
     //https://stackoverflow.com/questions/24633337/mpi-scatterv-mpi-gatherv-for-multiple-3d-arrays
-    MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,output->R,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
-    MPI_Scatterv(source->G,sendcounts,displacement,MPI_INT,output->G,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
-    MPI_Scatterv(source->B,sendcounts,displacement,MPI_INT,output->B,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
-    
+    MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveR,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+    MPI_Scatterv(source->G,sendcounts,displacement,MPI_INT,receiveG,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+    MPI_Scatterv(source->B,sendcounts,displacement,MPI_INT,receiveB,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+
+    /*convolve2D(receiveR, outputR, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveG, outputG, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveB, outputB, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);*/
+
     //MPI_Gather(&sub_avg, sendcounts[rank], MPI_INT, sub_avgs, 1, MPI_INT, 0,MPI_COMM_WORLD);
     
     //MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
 
-    if(rank==0){
+    /*if(rank==0){
 
         printf("%i,",*receiveArray);
 
@@ -368,7 +385,7 @@ int main(int argc, char **argv)
         gettimeofday(&tim, NULL);
         double t6=tim.tv_sec+(tim.tv_usec/1000000.0);
         clock_t finish=clock();
-    }
+    }*/
     
     
     /*printf("Image: %s\n", argv[1]);
