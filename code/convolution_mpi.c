@@ -285,28 +285,31 @@ int main(int argc, char **argv)
     }
 
     struct timeval tim;
-
     gettimeofday(&tim, NULL);
     double t1=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-    //Kernel reading
-    kernelData kern=NULL;
-    if ( (kern = readKernel(argv[2]))==NULL) {
-        //free(source);
-        //free(output);
+    //Read the source image.
+    ImagenData  source=NULL, output=NULL;
+    if ( (source=readImage(argv[1]))==NULL) {
         return -1;
     }
 
     gettimeofday(&tim, NULL);
     double t2=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-    //Read the source image.
-    ImagenData source=NULL, output=NULL;
+    // Duplicate the image in a new structure that will contain the output image
+    if ( (output=duplicateImageData(source)) == NULL) {
+        return -1;
+    }
 
     gettimeofday(&tim, NULL);
     double t3=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-    if ( (source=readImage(argv[1]))==NULL) {
+    //Kernel reading
+    kernelData kern=NULL;
+    if ( (kern = readKernel(argv[2]))==NULL) {
+        free(source);
+        free(output);
         return -1;
     }
 
@@ -320,16 +323,12 @@ int main(int argc, char **argv)
     int *displacement = malloc(sizeof(int)*size);
 
     // Scatter Variables
-    int  *receiveArray = malloc(sizeof(int)*source->width);
-    int sizePerCore;
-
-    // Duplicate the image in a new structure that will contain the output image
-    if ( (output=duplicateImageData(source)) == NULL) {
-        return -1;
-    }
+    int  *receiveR = malloc(sizeof(int) * source->width);
+    int  *receiveG = malloc(sizeof(int) * source->width);
+    int  *receiveB = malloc(sizeof(int) * source->width);
 
     // Displacement -> N_i = W X i * rowPerTask[i] to W X i * rowPerTask[i]-1
-    sizePerCore = source->width/size;
+    int sizePerCore = source->width/size;
 
     for (int i = 0; i < size-1; i++)
     {
@@ -341,18 +340,24 @@ int main(int argc, char **argv)
     displacement[size-1] = (size-1) * sizePerCore;
         
     //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
-    //https://stackoverflow.com/questions/24633337/mpi-scatterv-mpi-gatherv-for-multiple-3d-arrays
-    MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,output->R,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
-    MPI_Scatterv(source->G,sendcounts,displacement,MPI_INT,output->G,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
-    MPI_Scatterv(source->B,sendcounts,displacement,MPI_INT,output->B,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+
+    MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveR,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+    MPI_Scatterv(source->G,sendcounts,displacement,MPI_INT,receiveG,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+    MPI_Scatterv(source->B,sendcounts,displacement,MPI_INT,receiveB,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+
+    int *outputR = malloc(sizeof(int)*10000000000);
+    int *outputG = malloc(sizeof(int)*10000000000);
+    int *outputB = malloc(sizeof(int)*10000000000);
+
+    convolve2D(receiveR, outputR, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveG, outputG, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveB, outputB, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
+
     
-    //MPI_Gather(&sub_avg, sendcounts[rank], MPI_INT, sub_avgs, 1, MPI_INT, 0,MPI_COMM_WORLD);
-    
-    //MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
+    //MPI_Gather(outputR,sendcounts[rank], MPI_INT, output->R, sendcounts, MPI_INT, 0, MPI_COMM_WORLD);
+
 
     if(rank==0){
-
-        printf("%i,",*receiveArray);
 
         gettimeofday(&tim, NULL);
         double t5=tim.tv_sec+(tim.tv_usec/1000000.0);
@@ -360,8 +365,8 @@ int main(int argc, char **argv)
         // Image writing
         if (saveFile(output, argv[3])!=0) {
             printf("Error saving the image\n");
-            free(source);
-            free(output);
+            //free(source);
+            //free(output);
             return -1;
         }
 
