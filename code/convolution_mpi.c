@@ -387,19 +387,11 @@ int main(int argc, char **argv)
     MPI_Gatherv(outputG, sendcounts[rank], MPI_INT, output->G, sendcounts, displacement, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Gatherv(outputB, sendcounts[rank], MPI_INT, output->B, sendcounts, displacement, MPI_INT, 0, MPI_COMM_WORLD);
 
-    if (rank == 0) {
-        for(int i = 0; i < source->width*source->height; i++){
-            printf("%i,", output->R[i]);
-        }
-    }
-
     //MPI_Gather(&sub_avg, sendcounts[rank], MPI_INT, sub_avgs, 1, MPI_INT, 0,MPI_COMM_WORLD);
     
     //MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
 
-    /*if(rank==0){
-
-        printf("%i,",*receiveArray);
+    if(rank==0){
 
         gettimeofday(&tim, NULL);
         double t5=tim.tv_sec+(tim.tv_usec/1000000.0);
@@ -415,7 +407,7 @@ int main(int argc, char **argv)
         gettimeofday(&tim, NULL);
         double t6=tim.tv_sec+(tim.tv_usec/1000000.0);
         clock_t finish=clock();
-    }*/
+    }
     
     
     /*printf("Image: %s\n", argv[1]);
