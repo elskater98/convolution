@@ -73,14 +73,14 @@ ImagenData  readImage(char* name){
         Img->comment = calloc(strlen(comment),sizeof(char));
         strcpy(Img->comment,comment);
         // Read and save the width, height and maximum color
-        fscanf(fp,"%d %d %d",&Img->width,&Img->height,&Img->maxcolor);
+        fscanf(fp,"%d %d %d",&Img->width,&Img->height,&Img->maxcolor); // <width, height, maxcolor>
         // Memory is reserved in R, G and B according to width and height
         // And the values of R, G and B of the file are assigned
         if ((Img->R=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
         if ((Img->G=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
         if ((Img->B=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
         for(i=0;i<Img->width*Img->height;i++){
-            fscanf(fp,"%d %d %d ",&Img->R[i],&Img->G[i],&Img->B[i]);
+            fscanf(fp,"%d %d %d ",&Img->R[i],&Img->G[i],&Img->B[i]); // <0, 0, 0> => <R, G, B>
         }
         fclose(fp);
     }
@@ -334,6 +334,7 @@ int main(int argc, char **argv)
     // Displacement -> N_i = W X i * rowPerTask[i] to W X i * rowPerTask[i]-1
     int sizePerCore;
     sizePerCore = (source->width*source->height)/size;
+    printf("SizePerCore: %i\n", sizePerCore);
 
     for (int i = 0; i < size-1; i++)
     {
@@ -345,13 +346,12 @@ int main(int argc, char **argv)
     displacement[size-1] = (size-1) * sizePerCore;
 
     // Scatter Variables
-    printf("%i\n", sizePerCore);
-    int *receiveR = malloc(sizeof(int)*(sizePerCore+1));
-    int *receiveB = malloc(sizeof(int)*(sizePerCore+1));
-    int *receiveG = malloc(sizeof(int)*(sizePerCore+1));
-    int *outputR = malloc(sizeof(int)*(sizePerCore+1));
-    int *outputG = malloc(sizeof(int)*(sizePerCore+1));
-    int *outputB = malloc(sizeof(int)*(sizePerCore+1));  
+    int *receiveR = malloc(sizeof(int)*(sizePerCore*2));
+    int *receiveB = malloc(sizeof(int)*(sizePerCore*2));
+    int *receiveG = malloc(sizeof(int)*(sizePerCore*2));
+    int *outputR = malloc(sizeof(int)*(sizePerCore*20));
+    int *outputG = malloc(sizeof(int)*(sizePerCore*20));
+    int *outputB = malloc(sizeof(int)*(sizePerCore*20));
 
     //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
     //https://stackoverflow.com/questions/24633337/mpi-scatterv-mpi-gatherv-for-multiple-3d-arrays
@@ -359,10 +359,31 @@ int main(int argc, char **argv)
     MPI_Scatterv(source->G,sendcounts,displacement,MPI_INT,receiveG,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
     MPI_Scatterv(source->B,sendcounts,displacement,MPI_INT,receiveB,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
 
-    /*convolve2D(receiveR, outputR, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
-    convolve2D(receiveG, outputG, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
-    convolve2D(receiveB, outputB, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);*/
+    if(rank == 0) {
+        /*for (int i = 0; i < sizePerCore; i++){
+            printf("%i,", receiveR[i]);
+        }*/
+    }
 
+    int height = sizePerCore/source->width;
+    //printf("Height: %i\n", height);
+
+    convolve2D(receiveR, outputR, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveR, outputG, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveR, outputB, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
+
+    /*if (rank == 0) {
+        for (int i = 0; i < sizePerCore; i++){
+            printf("%i,", outputR[i]);
+        }
+        printf("SizePERcORE: %i\n", sizePerCore);
+    }
+
+    //convolve2D(receiveG, outputG, sizePerCore, 1, kern->vkern, kern->kernelX, kern->kernelY);
+    //convolve2D(receiveB, outputB, sizePerCore, 1, kern->vkern, kern->kernelX, kern->kernelY);
+
+
+    //MPI_Gatherv(outputR, sendcounts)
     //MPI_Gather(&sub_avg, sendcounts[rank], MPI_INT, sub_avgs, 1, MPI_INT, 0,MPI_COMM_WORLD);
     
     //MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
