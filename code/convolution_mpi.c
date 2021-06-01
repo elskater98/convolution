@@ -369,8 +369,8 @@ int main(int argc, char **argv)
     //printf("Height: %i\n", height);
 
     convolve2D(receiveR, outputR, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
-    convolve2D(receiveR, outputG, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
-    convolve2D(receiveR, outputB, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveG, outputG, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveB, outputB, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
 
     /*if (rank == 0) {
         for (int i = 0; i < sizePerCore; i++) {
