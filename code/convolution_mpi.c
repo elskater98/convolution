@@ -373,17 +373,26 @@ int main(int argc, char **argv)
     convolve2D(receiveR, outputB, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
 
     /*if (rank == 0) {
-        for (int i = 0; i < sizePerCore; i++){
+        for (int i = 0; i < sizePerCore; i++) {
             printf("%i,", outputR[i]);
         }
         printf("SizePERcORE: %i\n", sizePerCore);
-    }
+    }*/
 
     //convolve2D(receiveG, outputG, sizePerCore, 1, kern->vkern, kern->kernelX, kern->kernelY);
     //convolve2D(receiveB, outputB, sizePerCore, 1, kern->vkern, kern->kernelX, kern->kernelY);
 
 
-    //MPI_Gatherv(outputR, sendcounts)
+    MPI_Gatherv(outputR, sendcounts[rank], MPI_INT, output->R, sendcounts, displacement, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(outputG, sendcounts[rank], MPI_INT, output->G, sendcounts, displacement, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(outputB, sendcounts[rank], MPI_INT, output->B, sendcounts, displacement, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        for(int i = 0; i < source->width*source->height; i++){
+            printf("%i,", output->R[i]);
+        }
+    }
+
     //MPI_Gather(&sub_avg, sendcounts[rank], MPI_INT, sub_avgs, 1, MPI_INT, 0,MPI_COMM_WORLD);
     
     //MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveArray,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
