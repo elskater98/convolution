@@ -73,17 +73,18 @@ ImagenData  readImage(char* name){
         Img->comment = calloc(strlen(comment),sizeof(char));
         strcpy(Img->comment,comment);
         // Read and save the width, height and maximum color
-        fscanf(fp,"%d %d %d",&Img->width,&Img->height,&Img->maxcolor);
+        fscanf(fp,"%d %d %d",&Img->width,&Img->height,&Img->maxcolor); // <width, height, maxcolor>
         // Memory is reserved in R, G and B according to width and height
         // And the values of R, G and B of the file are assigned
         if ((Img->R=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
         if ((Img->G=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
         if ((Img->B=calloc(Img->width*Img->height,sizeof(int))) == NULL) {return NULL;}
         for(i=0;i<Img->width*Img->height;i++){
-            fscanf(fp,"%d %d %d ",&Img->R[i],&Img->G[i],&Img->B[i]);
+            fscanf(fp,"%d %d %d ",&Img->R[i],&Img->G[i],&Img->B[i]); // <0, 0, 0> => <R, G, B>
         }
         fclose(fp);
     }
+
     return Img;
 }
 
@@ -260,6 +261,7 @@ int convolve2D(int* in, int* out, int dataSizeX, int dataSizeY,
 int main(int argc, char **argv)
 {
     int i=0,j=0,k=0;
+    double starttime, endtime;
 
     // Initialize the MPI environment
     MPI_Init(&argc,&argv);
@@ -275,7 +277,6 @@ int main(int argc, char **argv)
     if(argc != 4)
     {
         printf("Usage: %s <image-file> <kernel-file> <result-file> <partitions>\n", argv[0]);
-
         printf("\n\nError, missing parameters:\n");
         printf("format: image_file kernel_file result_file\n");
         printf("- image_file : source image path (*.ppm)\n");
@@ -283,6 +284,7 @@ int main(int argc, char **argv)
         printf("- result_file: result image path (*.ppm)\n");
         return -1;
     }
+    starttime=MPI_Wtime();
 
     struct timeval tim;
     gettimeofday(&tim, NULL);
@@ -316,19 +318,13 @@ int main(int argc, char **argv)
     gettimeofday(&tim, NULL);
     double t4=tim.tv_sec+(tim.tv_usec/1000000.0);
 
-
     // MPI
     //Divide Load
     int *sendcounts = malloc(sizeof(int)*size);
     int *displacement = malloc(sizeof(int)*size);
 
-    // Scatter Variables
-    int  *receiveR = malloc(sizeof(int) * source->width);
-    int  *receiveG = malloc(sizeof(int) * source->width);
-    int  *receiveB = malloc(sizeof(int) * source->width);
-
-    // Displacement -> N_i = W X i * rowPerTask[i] to W X i * rowPerTask[i]-1
-    int sizePerCore = source->width/size;
+    int sizePerCore = (source->width*source->height)/size;
+    int height = sizePerCore/source->width;
 
     for (int i = 0; i < size-1; i++)
     {
@@ -338,23 +334,32 @@ int main(int argc, char **argv)
 
     sendcounts[size-1] = source->width % size == 0 ? sizePerCore : sizePerCore + 1;
     displacement[size-1] = (size-1) * sizePerCore;
-        
+
+    // Scatter
+    int *receiveR = malloc(sizeof(int)*(sizePerCore*2));
+    int *receiveB = malloc(sizeof(int)*(sizePerCore*2));
+    int *receiveG = malloc(sizeof(int)*(sizePerCore*2));
+    int *outputR = malloc(sizeof(int)*(sizePerCore*20));
+    int *outputG = malloc(sizeof(int)*(sizePerCore*20));
+    int *outputB = malloc(sizeof(int)*(sizePerCore*20));
+
     //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
+
 
     MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveR,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
     MPI_Scatterv(source->G,sendcounts,displacement,MPI_INT,receiveG,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
     MPI_Scatterv(source->B,sendcounts,displacement,MPI_INT,receiveB,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
 
-    int *outputR = malloc(sizeof(int)*10000000000);
-    int *outputG = malloc(sizeof(int)*10000000000);
-    int *outputB = malloc(sizeof(int)*10000000000);
+    // Convolve for each node
+    convolve2D(receiveR, outputR, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveG, outputG, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
+    convolve2D(receiveB, outputB, source->width, height, kern->vkern, kern->kernelX, kern->kernelY);
 
-    convolve2D(receiveR, outputR, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
-    convolve2D(receiveG, outputG, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
-    convolve2D(receiveB, outputB, source->width, source->height, kern->vkern, kern->kernelX, kern->kernelY);
 
-    
-    //MPI_Gather(outputR,sendcounts[rank], MPI_INT, output->R, sendcounts, MPI_INT, 0, MPI_COMM_WORLD);
+    // Gather
+    MPI_Gatherv(outputR, sendcounts[rank], MPI_INT, output->R, sendcounts, displacement, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(outputG, sendcounts[rank], MPI_INT, output->G, sendcounts, displacement, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Gatherv(outputB, sendcounts[rank], MPI_INT, output->B, sendcounts, displacement, MPI_INT, 0, MPI_COMM_WORLD);
 
 
     if(rank==0){
@@ -373,18 +378,19 @@ int main(int argc, char **argv)
         gettimeofday(&tim, NULL);
         double t6=tim.tv_sec+(tim.tv_usec/1000000.0);
         clock_t finish=clock();
+        endtime = MPI_Wtime();
+        
+        printf("Image: %s\n", argv[1]);
+        printf("SizeX : %d\n", source->width);
+        printf("SizeY : %d\n", source->height);
+        printf("%.6lf seconds elapsed for Reading image file.\n", t2-t1);
+        printf("%.6lf seconds elapsed for copying image structure.\n", t3-t2);
+        printf("%.6lf seconds elapsed for Reading kernel matrix.\n", t4-t3);
+        printf("%.6lf seconds elapsed for make the convolution.\n", t5-t4);
+        printf("%.6lf seconds elapsed for writing the resulting image.\n", t6-t5);
+        printf("%.6lf seconds elapsed\n", endtime-starttime);
+        
     }
-    
-    
-    /*printf("Image: %s\n", argv[1]);
-    printf("SizeX : %d\n", source->width);
-    printf("SizeY : %d\n", source->height);
-    printf("%.6lf seconds elapsed for Reading image file.\n", t2-t1);
-    printf("%.6lf seconds elapsed for copying image structure.\n", t3-t2);
-    printf("%.6lf seconds elapsed for Reading kernel matrix.\n", t4-t3);
-    printf("%.6lf seconds elapsed for make the convolution.\n", t5-t4);
-    printf("%.6lf seconds elapsed for writing the resulting image.\n", t6-t5);
-    printf("%.6lf seconds elapsed\n", t6-t1);*/
 
     // Finalize MPI
     MPI_Finalize();
