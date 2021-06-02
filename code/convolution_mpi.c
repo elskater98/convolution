@@ -322,6 +322,7 @@ int main(int argc, char **argv)
     //Divide Load
     int *sendcounts = malloc(sizeof(int)*size);
     int *displacement = malloc(sizeof(int)*size);
+
     int sizePerCore = (source->width*source->height)/size;
     int height = sizePerCore/source->width;
 
@@ -343,6 +344,7 @@ int main(int argc, char **argv)
     int *outputB = malloc(sizeof(int)*(sizePerCore*20));
 
     //https://mpitutorial.com/tutorials/mpi-scatter-gather-and-allgather/
+
 
     MPI_Scatterv(source->R,sendcounts,displacement,MPI_INT,receiveR,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
     MPI_Scatterv(source->G,sendcounts,displacement,MPI_INT,receiveG,sendcounts[rank],MPI_INT,0,MPI_COMM_WORLD);
@@ -368,8 +370,8 @@ int main(int argc, char **argv)
         // Image writing
         if (saveFile(output, argv[3])!=0) {
             printf("Error saving the image\n");
-            free(source);
-            free(output);
+            //free(source);
+            //free(output);
             return -1;
         }
 
