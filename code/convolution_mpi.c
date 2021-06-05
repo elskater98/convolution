@@ -332,7 +332,7 @@ int main(int argc, char **argv)
         displacement[i] = i * sizePerCore;
     }
 
-    sendcounts[size-1] = source->width % size == 0 ? sizePerCore : sizePerCore + 1;
+    sendcounts[size-1] = (source->width*source->height) % size == 0 ? sizePerCore : sizePerCore + 1;
     displacement[size-1] = (size-1) * sizePerCore;
 
     // Scatter
