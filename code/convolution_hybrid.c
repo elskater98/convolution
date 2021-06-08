@@ -207,56 +207,56 @@ int convolve2D(int* in, int* out, int dataSizeX, int dataSizeY,
     kPtr = kernel;
 
     // start convolution
-    #pragma omp parallel for schedule(dynamic) num_threads(MAX_THREADS) private(sum, i, rowMax, rowMin, j, m, n, colMax, colMin) firstprivate(kPtr, inPtr, inPtr2, outPtr)
-    for(i= 0; i < dataSizeY; ++i)                   // number of rows
-    {
-        // compute the range of convolution, the current row of kernel should be between these
-        rowMax = i + kCenterY;
-        rowMin = i - dataSizeY + kCenterY;
-
-        for(j = 0; j < dataSizeX; ++j)              // number of columns
+    #pragma omp parallel for schedule(dynamic) num_threads(4) private(sum, i, rowMax, rowMin, j, m, n, colMax, colMin) firstprivate(kPtr, inPtr, inPtr2, outPtr)
+        for(i= 0; i < dataSizeY; ++i)                   // number of rows
         {
-            // compute the range of convolution, the current column of kernel should be between these
-            colMax = j + kCenterX;
-            colMin = j - dataSizeX + kCenterX;
+            // compute the range of convolution, the current row of kernel should be between these
+            rowMax = i + kCenterY;
+            rowMin = i - dataSizeY + kCenterY;
 
-            sum = 0;                                // set to 0 before accumulate
-
-            // flip the kernel and traverse all the kernel values
-            // multiply each kernel value with underlying input data
-            for(m = 0; m < kernelSizeY; ++m)        // kernel rows
+            for(j = 0; j < dataSizeX; ++j)              // number of columns
             {
-                // check if the index is out of bound of input array
-                if(m <= rowMax && m > rowMin)
+                // compute the range of convolution, the current column of kernel should be between these
+                colMax = j + kCenterX;
+                colMin = j - dataSizeX + kCenterX;
+
+                sum = 0;                                // set to 0 before accumulate
+
+                // flip the kernel and traverse all the kernel values
+                // multiply each kernel value with underlying input data
+                for(m = 0; m < kernelSizeY; ++m)        // kernel rows
                 {
-                    for(n = 0; n < kernelSizeX; ++n)
+                    // check if the index is out of bound of input array
+                    if(m <= rowMax && m > rowMin)
                     {
-                        // check the boundary of array
-                        if(n <= colMax && n > colMin)
-                            sum += *(inPtr - n) * *kPtr;
+                        for(n = 0; n < kernelSizeX; ++n)
+                        {
+                            // check the boundary of array
+                            if(n <= colMax && n > colMin)
+                                sum += *(inPtr - n) * *kPtr;
 
-                        ++kPtr;                     // next kernel
+                            ++kPtr;                     // next kernel
+                        }
                     }
+                    else
+                        kPtr += kernelSizeX;            // out of bound, move to next row of kernel
+
+                    inPtr -= dataSizeX;                 // move input data 1 raw up
                 }
-                else
-                    kPtr += kernelSizeX;            // out of bound, move to next row of kernel
 
-                inPtr -= dataSizeX;                 // move input data 1 raw up
+                // convert integer number
+                if(sum >= 0) *outPtr = (int)(sum + 0.5f);
+                //else *outPtr = (int)(sum - 0.5f)*(-1);
+                // For using with image editors like GIMP or others...
+                else *outPtr = (int)(sum - 0.5f);
+                // For using with a text editor that read ppm images like libreoffice or others...
+                // else *outPtr = 0;
+
+                kPtr = kernel;                          // reset kernel to (0,0)
+                inPtr = ++inPtr2;                       // next input
+                ++outPtr;                               // next output
             }
-
-            // convert integer number
-            if(sum >= 0) *outPtr = (int)(sum + 0.5f);
-            //else *outPtr = (int)(sum - 0.5f)*(-1);
-            // For using with image editors like GIMP or others...
-            else *outPtr = (int)(sum - 0.5f);
-            // For using with a text editor that read ppm images like libreoffice or others...
-            // else *outPtr = 0;
-
-            kPtr = kernel;                          // reset kernel to (0,0)
-            inPtr = ++inPtr2;                       // next input
-            ++outPtr;                               // next output
         }
-    }
 
     return 0;
 }
