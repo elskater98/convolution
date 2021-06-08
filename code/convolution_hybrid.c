@@ -207,6 +207,7 @@ int convolve2D(int* in, int* out, int dataSizeX, int dataSizeY,
     kPtr = kernel;
 
     // start convolution
+    #pragma omp parallel for schedule(dynamic) num_threads(MAX_THREADS) private(sum, i, rowMax, rowMin, j, m, n, colMax, colMin) firstprivate(kPtr, inPtr, inPtr2, outPtr)
     for(i= 0; i < dataSizeY; ++i)                   // number of rows
     {
         // compute the range of convolution, the current row of kernel should be between these
