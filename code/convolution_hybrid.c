@@ -21,6 +21,7 @@
 #include "mpi.h"
 
 //OMP Library
+#include <omp.h>
 
 // Structure for storing the content of an image.
 struct imagenppm{
