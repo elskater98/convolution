@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <time.h>
+#include <omp.h>
 
 #define MAX_THREADS 8
 
